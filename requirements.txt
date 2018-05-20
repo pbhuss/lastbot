@@ -1,0 +1,4 @@
+Flask>=1.0.2
+pylast>=2.2.0
+PyYAML>=3.12
+uWSGI>=2.0.17

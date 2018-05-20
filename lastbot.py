@@ -2,7 +2,9 @@ import sqlite3
 import time
 import pylast
 import yaml
+from datetime import datetime
 from flask import g
+from flask import url_for
 from flask import Flask
 from flask import request
 from flask import jsonify
@@ -78,13 +80,13 @@ class ResponseType(object):
     IN_CHANNEL = 'in_channel'
 
 
-def get_response(type, text, attachment=None):
+def get_response(type, text, attachments=None):
     response = {
         "response_type": type,
         "text": text,
     }
-    if attachment:
-        response["attachments"] = [attachment]
+    if attachments:
+        response["attachments"] = attachments
 
     return jsonify(response)
 
@@ -106,7 +108,8 @@ def build_attachment(track, start_time):
         "footer": "LastFM Bot | response took {} ms".format(
             round(1000 * (time.time() - start_time), 0)
         ),
-        "footer_icon": "https://www.musicgusto.host:1337/static/lastfm.ico",
+        "footer_icon": url_for(
+            "static", filename="lastfm.ico", _external=True),
     }
 
     album = track.get_album()
@@ -183,11 +186,101 @@ def playing():
     if track:
         text = '{} is listening to:'.format(quote_user_id(user_id))
         attachment = build_attachment(track, start_time)
-        return get_response(ResponseType.IN_CHANNEL, text, attachment)
+        return get_response(ResponseType.IN_CHANNEL, text, [attachment])
     else:
         text = '{} isn\'t listening to anything.'.format(
             quote_user_id(user_id))
         return get_response(ResponseType.IN_CHANNEL, text)
+
+
+@app.route('/userinfo', methods=['POST'])
+def user_info():
+    if request.form.get('token') != get_verification_token():
+        return Response(status=400)
+    start_time = time.time()
+    form_text = request.form.get('text')
+    if form_text:
+        if not form_text[:2] == '<@':
+            return get_response(
+                ResponseType.EPHEMERAL,
+                'Username must begin with `@`.'
+            )
+        user_id = form_text.split('|')[0][2:]
+    else:
+        user_id = request.form.get('user_id')
+
+    team_id = request.form.get('team_id')
+
+    if not user_id:
+        return get_response(ResponseType.EPHEMERAL, 'Username required')
+
+    c = get_db().cursor()
+    row = c.execute(
+        "SELECT lastfm_user FROM users WHERE team_id = ? AND user_id = ?",
+        (team_id, user_id,)
+    ).fetchone()
+    c.close()
+
+    if row is None:
+        return get_response(
+            ResponseType.EPHEMERAL,
+            'No LastFM user registered to {}'.format(quote_user_id(user_id))
+        )
+    lastfm_user, = row
+
+    last = get_last()
+    user = last.get_user(lastfm_user)
+    playcount = user.get_playcount()
+    signup_date = datetime.fromtimestamp(user.get_unixtime_registered())
+    days_since_signup = (datetime.now() - signup_date).days
+    url = user.get_url()
+    plays_per_day = round(float(playcount) / days_since_signup, 1)
+    artists = user.get_top_artists(period=pylast.PERIOD_1MONTH, limit=5)
+
+    main_attachment = {
+        "pretext": "LastFM info for {}:".format(quote_user_id(user_id)),
+        "title": "<{}>".format(url),
+        "fields": [
+            {
+                "title": "Subscriber since",
+                "value": str(signup_date.date()),
+                "short": True
+            },
+            {
+                "title": "Scrobbles",
+                "value": "{} ({} per day)".format(
+                    playcount,
+                    plays_per_day
+                ),
+                "short": True
+            }
+        ],
+        "fallback": "{}".format(lastfm_user),
+        "color": "#f50000",
+    }
+
+    artist_fields = [
+        {
+            "title": artist.item.name,
+            "value": "{} plays".format(artist.weight),
+            "short": False
+        }
+        for artist in artists
+    ]
+
+    artist_attachment = {
+        "pretext": "*Top Artists (last 30 days)*",
+        "fields": artist_fields,
+        "color": "#f50000",
+        "footer": "LastFM Bot | response took {} ms".format(
+            round(1000 * (time.time() - start_time), 0)
+        ),
+        "footer_icon": url_for(
+            "static", filename="lastfm.ico", _external=True),
+    }
+
+    return get_response(
+        ResponseType.IN_CHANNEL, None, [main_attachment, artist_attachment])
 
 
 @app.route('/register', methods=['POST'])

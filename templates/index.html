@@ -1,14 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>LastBot</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="icon" href="{{ url_for('static', filename='lastfm.ico') }}">
-</head>
-<body>
-    <h1>LastBot</h1>
-    <p><strong>Version:</strong> {{ version }}</p>
-    <p><a href="/users">Registered Users</a></p>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block body %}
+        <h1>LastBot</h1>
+        <p><strong>Version:</strong> {{ version }}</p>
+        <ul>
+            <li><a href="/commands">Commands</a></li>
+            <li><a href="/users">Registered Users [requires auth]</a></li>
+        </ul>
+{% endblock %}

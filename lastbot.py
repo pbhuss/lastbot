@@ -152,7 +152,8 @@ def build_attachment(track, start_time):
                 "short": True
             },
         ],
-        "footer": "LastFM Bot | response took {} ms".format(
+        "footer": "<{}|LastFM Bot> | response took {} ms".format(
+            url_for('index', _external=True),
             round(1000 * (time.time() - start_time), 0)
         ),
         "footer_icon": url_for(
@@ -317,7 +318,8 @@ def user_info():
         "pretext": "*Top Artists (last 30 days)*",
         "fields": artist_fields,
         "color": "#f50000",
-        "footer": "LastFM Bot | response took {} ms".format(
+        "footer": "<{}|LastFM Bot> | response took {} ms".format(
+            url_for('index', _external=True),
             round(1000 * (time.time() - start_time), 0)
         ),
         "footer_icon": url_for(

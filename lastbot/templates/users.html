@@ -10,12 +10,12 @@
                 <th>Slack user_id</th>
                 <th>LastFM User</th>
             </tr>
-            {% for id_, team_id, user_id, lastfm_user in users %}
+            {% for user in users %}
             <tr>
-                <td>{{ id_ }}</td>
-                <td>{{ team_id }}</td>
-                <td>{{ user_id }}</td>
-                <td>{{ lastfm_user }}</td>
+                <td>{{ user.id }}</td>
+                <td>{{ user.team_id }}</td>
+                <td>{{ user.user_id }}</td>
+                <td>{{ user.lastfm_user }}</td>
             </tr>
             {% endfor %}
         </table>

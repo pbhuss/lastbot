@@ -1,3 +1,4 @@
-lastbot.db
-api.yaml
+instance/
+venv/
 .idea
+__pycache__

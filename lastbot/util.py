@@ -138,5 +138,3 @@ def now_playing_attachment(user_id, track, start_time):
     )
 
     return attachment
-
-

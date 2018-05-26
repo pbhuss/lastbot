@@ -5,13 +5,19 @@ from lastbot.appcontext import get_last
 
 import pylast
 from datetime import datetime
-from flask import url_for
 from flask import request
 from flask import render_template
 
 from lastbot.models import User
-from lastbot.util import requires_auth, requires_token, quote_user_id, get_response, now_playing_attachment, \
-    ResponseType, default_attachment_data
+from lastbot.util import (
+    requires_auth,
+    requires_token,
+    quote_user_id,
+    get_response,
+    now_playing_attachment,
+    ResponseType,
+    default_attachment_data
+)
 
 
 @app.route('/')

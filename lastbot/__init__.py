@@ -8,7 +8,7 @@ app.config.from_pyfile('config.py')
 
 db = SQLAlchemy(app)
 
-import lastbot.views
-import lastbot.models
+import lastbot.views    # noqa
+import lastbot.models   # noqa
 
 db.create_all()

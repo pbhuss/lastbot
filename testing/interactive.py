@@ -1,8 +1,8 @@
 import yaml
 from pylast import LastFMNetwork
 from lastbot import app
-from lastbot import db
-from lastbot.models import *
+from lastbot import db  # noqa
+from lastbot.models import *    # noqa
 
 
 def get_last():

@@ -29,15 +29,15 @@ def get_verification_token():
     return get_config()['slack_verification_token']
 
 
-def get_admin_password():
-    return get_config()['admin_password']
-
-
 def check_auth(username, password):
     """This function is called to check if a username /
     password combination is valid.
     """
-    return username == 'admin' and password == get_admin_password()
+    config = get_config()
+    return (
+        username == config['admin_username']
+        and password == config['admin_password']
+    )
 
 
 def auth_response():
@@ -64,7 +64,7 @@ def requires_token(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if request.form.get('token') != get_verification_token():
-            return Response(status=400)
+            return Response('Invalid token.', status=400)
         return f(*args, **kwargs)
     return decorated
 

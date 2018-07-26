@@ -18,6 +18,7 @@ from lastbot.util import (
     ResponseType,
     default_attachment_data
 )
+from random import randint
 
 
 @app.route('/')
@@ -35,6 +36,27 @@ def commands():
 def users():
     rows = User.query.all()
     return render_template('users.html', users=rows)
+
+
+def _select_from_table(channel_id, id)
+    selected_track = Track.query.filter_by(
+        channel_id=channel_id,
+        id=id).first()
+
+"/hail "
+
+"/play"
+
+@app.route('/tune', methods=['POST'])
+@requires_token
+def tune():
+
+    # grab max
+    # random in range
+
+    # grab a track from db
+
+
 
 
 @app.route('/playing', methods=['POST'])
@@ -70,11 +92,26 @@ def playing():
 
     try:
         track = get_last().get_user(row.lastfm_user).get_now_playing()
+        # logging in db
+
+
+        import pdb; pdb.set_trace()
     except pylast.WSError as e:
         return get_response(ResponseType.EPHEMERAL, e.details)
 
     if track:
         attachment = now_playing_attachment(user_id, track, start_time)
+
+        row = Track(
+            team_id=team_id, 
+            user_id=user_id, 
+            channel_id=request.form.get("channel_id"), 
+            artist=track.artist.name,
+            title=track.title
+        )
+
+        db.session.add(row)
+        db.session.commit()
         return get_response(ResponseType.IN_CHANNEL, None, [attachment])
     else:
         text = '{} isn\'t listening to anything.'.format(

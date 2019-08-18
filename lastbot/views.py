@@ -1,17 +1,15 @@
 import time
 import lastbot
-from lastbot import app, db
-from lastbot.appcontext import get_last
 
-import pylast
 from datetime import datetime
-from flask import request
+from flask import request, Blueprint
 from flask import render_template
 
-from lastbot.models import User
+from lastbot import db
+from lastbot.lastfm import LastFMAPIError, LastFMAPI
 from lastbot.util import (
     requires_auth,
-    requires_token,
+    verify_signature,
     quote_user_id,
     get_response,
     now_playing_attachment,
@@ -20,25 +18,32 @@ from lastbot.util import (
 )
 
 
-@app.route('/')
+main = Blueprint('main', __name__)
+
+
+@main.route('/')
 def index():
     return render_template('index.html', version=lastbot.__version__)
 
 
-@app.route('/commands')
+@main.route('/commands')
 def commands():
     return render_template('commands.html')
 
 
-@app.route('/users')
+@main.route('/users')
 @requires_auth
 def users():
-    rows = User.query.all()
+    rows = [
+        {'team_id': team_id, 'user_id': user_id, 'lastfm_user': lastfm_user}
+        for team_id in db.get_teams()
+        for user_id, lastfm_user in db.get_user_map(team_id)
+    ]
     return render_template('users.html', users=rows)
 
 
-@app.route('/playing', methods=['POST'])
-@requires_token
+@main.route('/playing', methods=['POST'])
+@verify_signature
 def playing():
     start_time = time.time()
     form_text = request.form.get('text')
@@ -57,24 +62,23 @@ def playing():
     if not user_id:
         return get_response(ResponseType.EPHEMERAL, 'Username required')
 
-    row = User.query.filter_by(
-        team_id=team_id,
-        user_id=user_id,
-    ).one_or_none()
+    lastfm_user = db.get_lastfm_user(team_id, user_id)
 
-    if row is None:
+    if lastfm_user is None:
         return get_response(
             ResponseType.EPHEMERAL,
             'No LastFM user registered to {}'.format(quote_user_id(user_id))
         )
 
+    api = LastFMAPI.from_app(lastbot.app)
+
     try:
-        track = get_last().get_user(row.lastfm_user).get_now_playing()
-    except pylast.WSError as e:
-        return get_response(ResponseType.EPHEMERAL, e.details)
+        track = api.user.get_now_playing(lastfm_user)
+    except LastFMAPIError as e:
+        return get_response(ResponseType.EPHEMERAL, 'LastFM API error occurred')
 
     if track:
-        attachment = now_playing_attachment(user_id, track, start_time)
+        attachment = now_playing_attachment(api, user_id, track, start_time)
         return get_response(ResponseType.IN_CHANNEL, None, [attachment])
     else:
         text = '{} isn\'t listening to anything.'.format(
@@ -82,8 +86,8 @@ def playing():
         return get_response(ResponseType.IN_CHANNEL, text)
 
 
-@app.route('/userinfo', methods=['POST'])
-@requires_token
+@main.route('/userinfo', methods=['POST'])
+@verify_signature
 def user_info():
     start_time = time.time()
     form_text = request.form.get('text')
@@ -166,8 +170,8 @@ def user_info():
         ResponseType.IN_CHANNEL, None, [main_attachment, artist_attachment])
 
 
-@app.route('/register', methods=['POST'])
-@requires_token
+@main.route('/register', methods=['POST'])
+@verify_signature
 def register():
     team_id = request.form.get('team_id')
     user_id = request.form.get('user_id')
@@ -204,8 +208,8 @@ def register():
             lastfm_user, quote_user_id(user_id))
 
 
-@app.route('/unlink', methods=['POST'])
-@requires_token
+@main.route('/unlink', methods=['POST'])
+@verify_signature
 def unlink():
     team_id = request.form.get('team_id')
     user_id = request.form.get('user_id')

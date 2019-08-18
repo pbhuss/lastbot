@@ -1,11 +1,11 @@
+import hmac
 import time
-from functools import wraps
+from functools import wraps, lru_cache
 
-import pylast
+import redis
 from flask import Response, request, jsonify, url_for
 
 import lastbot
-from lastbot.appcontext import get_config
 
 
 class ResponseType(object):
@@ -25,18 +25,22 @@ def get_response(type, text, attachments=None):
     return jsonify(response)
 
 
-def get_verification_token():
-    return get_config()['slack_verification_token']
+def get_signing_secret():
+    return lastbot.app.config['signing_secret'].encode('utf-8')
+
+
+@lru_cache(maxsize=1)
+def get_redis():
+    return redis.Redis.from_url(lastbot.app.config['REDIS_URL'])
 
 
 def check_auth(username, password):
     """This function is called to check if a username /
     password combination is valid.
     """
-    config = get_config()
     return (
-        username == config['admin_username']
-        and password == config['admin_password']
+        username == lastbot.app.config['ADMIN_USERNAME']
+        and password == lastbot.app.config['ADMIN_PASSWORD']
     )
 
 
@@ -60,11 +64,35 @@ def requires_auth(f):
     return decorated
 
 
-def requires_token(f):
+def verify_signature(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if request.form.get('token') != get_verification_token():
-            return Response('Invalid token.', status=400)
+        if (
+            'X-Slack-Request-Timestamp' not in request.headers
+            or 'X-Slack-Signature' not in request.headers
+        ):
+            lastbot.log.warning('Request missing expected headers!')
+            return Response(status=400)
+
+        if abs(
+            time.time() - request.headers.get(
+                'X-Slack-Request-Timestamp', type=int)
+        ) > 60 * 5:
+            # The request timestamp is more than five minutes from local time.
+            # It could be a replay attack, so let's ignore it.
+            lastbot.log.warning('Request is possible replay attack!')
+            return Response(status=400)
+
+        msg = b':'.join((
+            b'v0',
+            request.headers.get('X-Slack-Request-Timestamp', as_bytes=True),
+            request.get_data()
+        ))
+        digest = hmac.new(get_signing_secret(), msg, 'sha256').hexdigest()
+        signature = request.headers['X-Slack-Signature']
+        if not hmac.compare_digest(f'v0={digest}', signature):
+            lastbot.log.warning('Request failed signature check!')
+            return Response(status=400)
         return f(*args, **kwargs)
     return decorated
 
@@ -92,16 +120,17 @@ def default_attachment_data(start_time=None):
     }
 
 
-def now_playing_attachment(user_id, track, start_time):
+def now_playing_attachment(api, user_id, track, start_time):
+    artist = api.artist.get_info(track['artist']['#text'])
     attachment = {
         "pretext": '{} is listening to:'.format(quote_user_id(user_id)),
-        "fallback": "{} - {}".format(track.artist.name, track.title),
+        "fallback": "{} - {}".format(track['artist']['#text'], track['name']),
         "fields": [
             {
                 "title": "Artist",
                 "value": "<{}|{}>".format(
-                    track.artist.get_url(),
-                    track.artist.name
+                    artist['url'],
+                    artist['name']
                 ),
                 "short": True
             },
@@ -109,29 +138,33 @@ def now_playing_attachment(user_id, track, start_time):
         **default_attachment_data(start_time)
     }
 
-    album = track.get_album()
+    album = track.get('album')
     if album:
         attachment["fields"].append(
             {
                 "title": "Album",
                 "value": "<{}|{}>".format(
-                    album.get_url(),
-                    album.get_name()
+                    album['url'],
+                    album['#text']
                 ),
                 "short": True
             }
         )
-        attachment["image_url"] = album.get_cover_image(pylast.SIZE_LARGE)
+
+    image = track.get('image')
+    if image:
+        attachment["image_url"] = image[2]['#text']
     else:
-        attachment["image_url"] = track.artist.get_cover_image(
-            pylast.SIZE_LARGE)
+        pass    #TODO
+        # attachment["image_url"] = track.artist.get_cover_image(
+        #     pylast.SIZE_LARGE)
 
     attachment["fields"].append(
         {
             "title": "Title",
             "value": "<{}|{}>".format(
-                track.get_url(),
-                track.title
+                track['url'],
+                track['name']
             ),
             "short": True
         }

@@ -1,14 +1,18 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
+from flask.logging import create_logger
 
-__version__ = '0.0.3'
+from lastbot.views import main
 
-app = Flask(__name__, instance_relative_config=True)
-app.config.from_pyfile('config.py')
 
-db = SQLAlchemy(app)
+__version__ = '0.1.0'
 
-import lastbot.views    # noqa
-import lastbot.models   # noqa
 
-db.create_all()
+def create_app(config_filename):
+    app = Flask(__name__, instance_relative_config=True)
+    app.config.from_pyfile(config_filename)
+    app.register_blueprint(main)
+    return app
+
+
+app = create_app('config.py')
+log = create_logger(app)

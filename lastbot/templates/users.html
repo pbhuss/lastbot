@@ -5,17 +5,15 @@
         <p><a href="/">Home</a></p>
         <table>
             <tr>
-                <th>ID</th>
                 <th>Slack team_id</th>
                 <th>Slack user_id</th>
                 <th>LastFM User</th>
             </tr>
             {% for user in users %}
             <tr>
-                <td>{{ user.id }}</td>
-                <td>{{ user.team_id }}</td>
-                <td>{{ user.user_id }}</td>
-                <td>{{ user.lastfm_user }}</td>
+                <td>{{ user['team_id'] }}</td>
+                <td>{{ user['user_id'] }}</td>
+                <td>{{ user['lastfm_user'] }}</td>
             </tr>
             {% endfor %}
         </table>

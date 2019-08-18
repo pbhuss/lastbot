@@ -1,0 +1,29 @@
+version: "2"
+services:
+
+  redis:
+    image: redis:latest
+    command: redis-server --appendonly yes
+    volumes:
+      - ./data:/data
+
+  flask:
+    image: lastbot-flask
+    build:
+      context: .
+      dockerfile: Dockerfile-flask
+    command: uwsgi --ini instance/lastbot.ini
+    volumes:
+      - ./:/usr/src/app
+    depends_on:
+      - redis
+
+  nginx:
+    image: lastbot-nginx
+    build:
+      context: .
+      dockerfile: Dockerfile-nginx
+    ports:
+      - "1337:443"
+    depends_on:
+      - flask

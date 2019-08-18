@@ -26,7 +26,7 @@ def get_response(type, text, attachments=None):
 
 
 def get_signing_secret():
-    return lastbot.app.config['signing_secret'].encode('utf-8')
+    return lastbot.app.config['SIGNING_SECRET'].encode('utf-8')
 
 
 @lru_cache(maxsize=1)

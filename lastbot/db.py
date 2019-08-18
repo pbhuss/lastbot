@@ -3,10 +3,14 @@ from typing import Union, List
 from lastbot.util import get_redis
 
 
-def set_lastfm_user(team_id: str, user_id: str) -> int:
+def set_lastfm_user(team_id: str, user_id: str, lastfm_user: str) -> int:
     redis = get_redis()
     redis.sadd('teams', team_id)
-    return redis.hset(f'users:{team_id}', user_id)
+    return redis.hset(f'users:{team_id}', user_id, lastfm_user)
+
+
+def delete_lastfm_user(team_id: str, user_id: str) -> int:
+    return get_redis().hdel(f'users:{team_id}', user_id)
 
 
 def get_lastfm_user(team_id: str, user_id: str) -> Union[str, None]:

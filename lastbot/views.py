@@ -89,6 +89,7 @@ def playing():
 @main.route('/userinfo', methods=['POST'])
 @verify_signature
 def user_info():
+    return get_response(ResponseType.EPHEMERAL, 'This command is currently disabled -- check back soon!')
     start_time = time.time()
     form_text = request.form.get('text')
     if form_text:
@@ -106,68 +107,65 @@ def user_info():
     if not user_id:
         return get_response(ResponseType.EPHEMERAL, 'Username required')
 
-    row = User.query.filter_by(
-        team_id=team_id,
-        user_id=user_id,
-    ).one_or_none()
+    lastfm_user = db.get_lastfm_user(team_id, user_id)
 
-    if row is None:
+    if lastfm_user is None:
         return get_response(
             ResponseType.EPHEMERAL,
             'No LastFM user registered to {}'.format(quote_user_id(user_id))
         )
 
-    last = get_last()
-    user = last.get_user(row.lastfm_user)
-    playcount = user.get_playcount()
-    signup_date = datetime.fromtimestamp(user.get_unixtime_registered())
-    days_since_signup = max(1, (datetime.now() - signup_date).days)
-    url = user.get_url()
-    plays_per_day = round(float(playcount) / days_since_signup, 1)
-    artists = user.get_top_artists(period=pylast.PERIOD_1MONTH, limit=5)
-
-    main_attachment = {
-        "pretext": "LastFM info for {}:".format(quote_user_id(user_id)),
-        "title": "<{}>".format(url),
-        "fields": [
-            {
-                "title": "Subscriber since",
-                "value": str(signup_date.date()),
-                "short": True
-            },
-            {
-                "title": "Scrobbles",
-                "value": "{} ({} per day)".format(
-                    playcount,
-                    plays_per_day
-                ),
-                "short": True
-            }
-        ],
-        "fallback": "{}".format(row.lastfm_user),
-        "color": "#f50000",
-    }
-
-    artist_fields = [
-        {
-            "title": artist.item.name,
-            "value": "{} plays".format(artist.weight),
-            "short": False
-        }
-        for artist in artists
-    ]
-
-    artist_attachment = {
-        "pretext": "*Top Artists (last 30 days)*",
-        "fallback": "Top Artists (last 30 days): {}".format(
-            ','.join((artist.item.name for artist in artists))
-        ),
-        "fields": artist_fields,
-        **default_attachment_data(start_time)
-    }
-
-    return get_response(
-        ResponseType.IN_CHANNEL, None, [main_attachment, artist_attachment])
+    # last = get_last()
+    # user = last.get_user(row.lastfm_user)
+    # playcount = user.get_playcount()
+    # signup_date = datetime.fromtimestamp(user.get_unixtime_registered())
+    # days_since_signup = max(1, (datetime.now() - signup_date).days)
+    # url = user.get_url()
+    # plays_per_day = round(float(playcount) / days_since_signup, 1)
+    # artists = user.get_top_artists(period=pylast.PERIOD_1MONTH, limit=5)
+    #
+    # main_attachment = {
+    #     "pretext": "LastFM info for {}:".format(quote_user_id(user_id)),
+    #     "title": "<{}>".format(url),
+    #     "fields": [
+    #         {
+    #             "title": "Subscriber since",
+    #             "value": str(signup_date.date()),
+    #             "short": True
+    #         },
+    #         {
+    #             "title": "Scrobbles",
+    #             "value": "{} ({} per day)".format(
+    #                 playcount,
+    #                 plays_per_day
+    #             ),
+    #             "short": True
+    #         }
+    #     ],
+    #     "fallback": "{}".format(row.lastfm_user),
+    #     "color": "#f50000",
+    # }
+    #
+    # artist_fields = [
+    #     {
+    #         "title": artist.item.name,
+    #         "value": "{} plays".format(artist.weight),
+    #         "short": False
+    #     }
+    #     for artist in artists
+    # ]
+    #
+    # artist_attachment = {
+    #     "pretext": "*Top Artists (last 30 days)*",
+    #     "fallback": "Top Artists (last 30 days): {}".format(
+    #         ','.join((artist.item.name for artist in artists))
+    #     ),
+    #     "fields": artist_fields,
+    #     **default_attachment_data(start_time)
+    # }
+    #
+    # return get_response(
+    #     ResponseType.IN_CHANNEL, None, [main_attachment, artist_attachment])
 
 
 @main.route('/register', methods=['POST'])
@@ -180,30 +178,24 @@ def register():
         return "LastFM username required"
 
     # Validate LastFM user
+    api = LastFMAPI.from_app(lastbot.app)
     try:
-        get_last().get_user(lastfm_user).get_registered()
-    except pylast.WSError as e:
+        api.user.get_info(lastfm_user)
+    except LastFMAPIError as e:
         return 'LastFM user `{}` not found'.format(lastfm_user)
 
-    row = User.query.filter_by(
-        team_id=team_id,
-        user_id=user_id,
-    ).one_or_none()
+    old_user = db.get_lastfm_user(team_id, user_id)
 
-    if row:
-        if row.lastfm_user != lastfm_user:
-            row.lastfm_user = lastfm_user
-            db.session.add(row)
-            db.session.commit()
+    if old_user:
+        if old_user != lastfm_user:
+            db.set_lastfm_user(team_id, user_id, lastfm_user)
             return "Updated LastFM user for {} to `{}`".format(
                 quote_user_id(user_id), lastfm_user)
         else:
             return "LastFM user `{}` already registed to {}".format(
                 lastfm_user, quote_user_id(user_id))
     else:
-        row = User(team_id=team_id, user_id=user_id, lastfm_user=lastfm_user)
-        db.session.add(row)
-        db.session.commit()
+        db.set_lastfm_user(team_id, user_id, lastfm_user)
         return "Registed LastFM user `{}` to {}".format(
             lastfm_user, quote_user_id(user_id))
 
@@ -214,16 +206,12 @@ def unlink():
     team_id = request.form.get('team_id')
     user_id = request.form.get('user_id')
 
-    row = User.query.filter_by(
-        team_id=team_id,
-        user_id=user_id,
-    ).one_or_none()
+    lastfm_user = db.get_lastfm_user(team_id, user_id)
 
-    if row:
-        db.session.delete(row)
-        db.session.commit()
+    if lastfm_user:
+        db.delete_lastfm_user(team_id, user_id)
         return "Unlinked LastFM user `{}` from {}".format(
-            row.lastfm_user, quote_user_id(user_id))
+            lastfm_user, quote_user_id(user_id))
     else:
         return get_response(
             ResponseType.EPHEMERAL,

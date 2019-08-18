@@ -102,7 +102,7 @@ def quote_user_id(user_id):
 
 
 def default_attachment_data(start_time=None):
-    homepage_url = url_for('index', _external=True)
+    homepage_url = url_for('main.index', _external=True)
     if start_time:
         footer = "<{}|LastFM Bot {}> | response took {} ms".format(
             homepage_url,
